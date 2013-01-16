@@ -1,0 +1,140 @@
+
+1 基本功能
+
+-- 插斷: int 0x50: 關機. (好像不是yotlibc XD")
+-- Macro: void exit(全域變數) 取消.
+
+
+2 輸出（透過 BIOS）
+
+-- Function: void putint(unsigned short 數字)
+    以 10 進位顯示一個 16-bit 無號整數
+
+-- Function: void putcharhex(char 位元組)
+    以 16 進位顯示一個位元組的值
+
+-- Function: void putstr(const char* 字串)
+    顯示字串（不會自動加上 '\n'）
+
+
+3 讀入一個按鍵
+
+-- Function: int getch(void)
+    等待使用者按鍵，回傳按鍵的 scan code 與 ASCII code
+
+-- Macro: int GETCH_SCANCODE(int 按鍵值)
+    取出 getch() 回傳值的 scan code 部份
+
+-- Macro: int GETCH_ASCII(int 按鍵值)
+    取出 getch() 回傳值的 ASCII code 部份
+
+
+4 螢幕輸出控制（除了部份與 BIOS 相容的函式外，這些函式並不依賴 BIOS）
+
+-- Data Type: XYCOORD
+    儲存座標
+
+-- Macro: int CHAR_VGA_POSITION(int x, int y)
+    將 x 與 y 座標轉成單一整數
+
+-- Macro: int CHAR_VGA_GETX(int n)
+    將轉為單一整數後的座標的 x 部份取出
+
+-- Macro: int CHAR_VGA_GETY(int n)
+    將轉為單一整數後的座標的 y 部份取出
+
+-- Constant: int CHAR_VGA_SCREENX
+    定義螢幕行數
+
+-- Constant: int CHAR_VGA_SCREENY   
+    定義螢幕列數
+
+-- Constant: int CHAR_VGA_SCREENSIZE
+    定義螢幕總字數
+
+-- Constant: int CHAR_VGA_MMIOSIZE  
+    VGA memory-mapped I/O 在記憶體中佔的總位元組數
+
+-- Macro: int CHV_COLORPAIR(int 前景, int 背景)
+    產生前景、背景顏色對數值
+
+-- Variable: int char_vga_cursor_x
+    儲存目前游標位置的 x 座標
+
+-- Variable: int char_vga_cursor_y
+    儲存目前游標位置的 y 座標
+
+-- Function: void chv_init_cursor(void)
+    將目前游標位址存入全域變數
+    第一次使用或是使用其他類型函式（包含 BIOS 或是 put 開頭的函式）變游標位址
+    時，必須先執行這個函式
+
+-- Function: void chv_sync_cursor(void)
+    執行游標移動。所有游標移動函式（chv_set_cursor、chv_set_cursor_direct、
+    chv_reset_cursor 除外）只會更改變數值，必須執行此函式才會真正移動游標
+
+-- Function: void chv_reset_cursor(void)
+    將游標移回左上角
+
+-- Function: void chv_get_cursor(XYCOORD* 回傳的位址)
+    透過 I/O 取得游標位址
+
+-- Function: void chv_set_cursor(XYCOORD* 要設定的位址)
+    立即移動游標
+
+-- Function: void chv_set_cursor_direct(int x, int y)
+    同上，只是不需要準備一個 struct
+
+-- Function: void chv_movenext_cursor(void)
+    游標移到後一格，換行、螢幕捲動的問題會自動處理
+
+-- Function: void chv_moveprev_cursor(void)
+    游標移到前一格，行的問題會自動處理
+
+-- Function: void chv_move_cursor(int 格子數量)
+    游標大量向後移動（指定負數可向前移動）
+
+-- Function: void chv_putchar(int 字元)
+    顯示一個字元（游標自動後移）
+
+-- Function: void chv_putchar_color(int 字元, int 顏色)
+    同上，多了指定顏色的功能
+
+-- Function: void chv_backspace(void)
+    清除目前所在位置的字元並倒退一格
+
+-- Function: void chv_clear(void)
+    清空整個螢幕
+
+-- Function: void chv_scroll(int 行數)
+    螢幕捲動
+
+-- Function: char chv_memread(int 位置)
+    自 0xB8000+位置 讀回一個位元組
+
+-- Function: void chv_memwrite(int 位置, char 字元)
+    向 0xB8000+位置 寫入一個位元組
+
+-- Macro: void chv_screen_write_char(int 位置, int 字元)
+    替換此位置的字元
+
+-- Macro: void chv_screen_write_color(int 位置, int 顏色) 
+    替換此位置字元的顏色
+
+-- Function: void char_vga_get_cursor(void)
+             void char_vga_set_cursor(int 位置)
+    內部運作的函式，我不多做解釋
+
+-- Function: void char_vga_frombios(void)
+    透過 BIOS 讀回目前游標位置
+
+-- Function: void char_vga_tobios(void)
+    透過 BIOS 移動目前游標位置
+
+
+5 字串輸入
+
+-- Function: int getstr(char* 字串, int 字串最大長度)
+    ARG1 = 要存到哪裡
+    ARG2 = 最多可以讀多長（'\0' 不計入，但要自行保留空間）
+    RVAL = 實際讀了幾個字
