@@ -1,8 +1,10 @@
 *.a
 *.o
 *.img
+*.swp
+*.swo
+tags
 55aa
 bootsect
 kernel
 yotsh
-

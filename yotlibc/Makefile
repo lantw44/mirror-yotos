@@ -2,7 +2,7 @@
 .PHONY: all clean
 .SUFFIXES: .c.o .s.o
 
-OBJ=bccfunc.o str_out.o char_in.o str_in.o char_vga.o char_vhl.o
+OBJ=bccfunc.o str_out.o char_in.o str_in.o char_vga.o char_vhl.o strbasic.o
 
 all: yotlibc.a
 

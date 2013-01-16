@@ -1,8 +1,9 @@
 #include "yotlibc.h"
 
-int getstr(dest, maxlen)
+int getstr(dest, maxlen, color)
 	char* dest;
 	int maxlen;
+	int color;
 {
 	int c, cascii, cscan;
 	int i = 0, j;
@@ -18,15 +19,19 @@ int getstr(dest, maxlen)
 		if(cascii >= 32 && cascii < 128){
 			if(i < maxlen){
 				dest[i++] = cascii;
-				chv_putchar(cascii);
+				chv_putchar_color(cascii, color);
 				chv_sync_cursor();
 			}
 		}else{
 			switch(cscan){
 				case KEYDOWN_SCANCODE_ENTER:
 					dest[i++] = '\0';
-					char_vga_cursor_y++;
-					char_vga_cursor_x = 0;
+					if(char_vga_cursor_y + 1 >= CHAR_VGA_SCREENY){
+						char_vga_cursor_y = CHAR_VGA_SCREENY - 1;
+						chv_scroll(1);
+					}else{
+						char_vga_cursor_y++;
+					}
 					chv_sync_cursor();
 					char_vga_tobios();
 					return i;
@@ -41,7 +46,7 @@ int getstr(dest, maxlen)
 				case KEYDOWN_SCANCODE_ESC:
 					chv_move_cursor(-i);
 					for(j=0; j<i; j++){
-						chv_putchar(' ');
+						chv_putchar_color(' ', color);
 					}
 					chv_move_cursor(-i);
 					chv_sync_cursor();
@@ -54,10 +59,11 @@ int getstr(dest, maxlen)
 	return 0;
 }
 
-int yotrl(dest, init, maxlen)
+int yotrl(dest, init, maxlen, color)
 	char* dest;
 	char* init;
 	int maxlen;
+	int color;
 {
 	int c, cascii, cscan;
 	int pos = 0, nowlen = 0, i;
@@ -77,7 +83,7 @@ int yotrl(dest, init, maxlen)
 		dest[i] = '\0';
 		pos = i, nowlen = i;
 		for(ip = dest; *ip != '\0'; ip++){
-			chv_putchar(*ip);
+			chv_putchar_color(*ip, color);
 		}
 	}
 
@@ -93,7 +99,7 @@ int yotrl(dest, init, maxlen)
 				if(pos == nowlen){
 					dest[pos++] = cascii;
 					nowlen++;
-					chv_putchar(cascii);
+					chv_putchar_color(cascii, color);
 					chv_sync_cursor();
 				}else{
 					xy.x = char_vga_cursor_x;
@@ -102,10 +108,10 @@ int yotrl(dest, init, maxlen)
 						dest[i] = dest[i-1];
 					}
 					dest[pos] = cascii;
-					chv_putchar(cascii);
+					chv_putchar_color(cascii, color);
 					nowlen++, pos++;
 					for(i=pos; i<nowlen; i++){
-						chv_putchar(dest[i]);
+						chv_putchar_color(dest[i], color);
 					}
 					char_vga_cursor_x = xy.x;
 					char_vga_cursor_y = xy.y;
@@ -117,7 +123,11 @@ int yotrl(dest, init, maxlen)
 			switch(cscan){
 				case KEYDOWN_SCANCODE_ENTER:
 					dest[nowlen++] = '\0';
-					char_vga_cursor_y++;
+					if(++char_vga_cursor_y >= CHAR_VGA_SCREENY){
+						char_vga_cursor_y--;
+						chv_scroll(1);
+						char_vga_cursor_y++;
+					}
 					char_vga_cursor_x = 0;
 					chv_sync_cursor();
 					char_vga_tobios();
@@ -154,9 +164,9 @@ int yotrl(dest, init, maxlen)
 						}
 						pos--, nowlen--;
 						for(i=pos; i<nowlen; i++){
-							chv_putchar(dest[i]);
+							chv_putchar_color(dest[i], color);
 						}
-						chv_putchar(' ');
+						chv_putchar_color(' ', color);
 						char_vga_cursor_x = xy.x;
 						char_vga_cursor_y = xy.y;
 						chv_sync_cursor();
@@ -173,9 +183,9 @@ int yotrl(dest, init, maxlen)
 					}
 					nowlen--;
 					for(i=pos; i<nowlen; i++){
-						chv_putchar(dest[i]);
+						chv_putchar_color(dest[i], color);
 					}
-					chv_putchar(' ');
+					chv_putchar_color(' ', color);
 					char_vga_cursor_x = xy.x;
 					char_vga_cursor_y = xy.y;
 					chv_sync_cursor();
@@ -200,7 +210,7 @@ int yotrl(dest, init, maxlen)
 				case 3: /* Ctrl+C */
 					chv_move_cursor(-pos);
 					for(i=0; i<nowlen; i++){
-						chv_putchar(' ');
+						chv_putchar_color(' ', color);
 					}
 					chv_move_cursor(-nowlen);
 					chv_sync_cursor();
@@ -216,7 +226,7 @@ int yotrl(dest, init, maxlen)
 					xy.x = char_vga_cursor_x;
 					xy.y = char_vga_cursor_y;
 					for(i=0; i<blank; i++){
-						chv_putchar(' ');
+						chv_putchar_color(' ', color);
 					}
 					nowlen = pos;
 					char_vga_cursor_x = xy.x;
@@ -234,10 +244,10 @@ int yotrl(dest, init, maxlen)
 					pos = 0;
 					nowlen -= blank;
 					for(i=0; i<nowlen; i++){
-						chv_putchar(dest[i]);
+						chv_putchar_color(dest[i], color);
 					}
 					for(i=0; i<blank; i++){
-						chv_putchar(' ');
+						chv_putchar_color(' ', color);
 					}
 					char_vga_cursor_x = xy.x;
 					char_vga_cursor_y = xy.y;
@@ -263,10 +273,10 @@ int yotrl(dest, init, maxlen)
 					xy.x = char_vga_cursor_x;
 					xy.y = char_vga_cursor_y;
 					for(i=pos; i<nowlen; i++){
-						chv_putchar(dest[i]);
+						chv_putchar_color(dest[i], color);
 					}
 					for(i=0; i<blank; i++){
-						chv_putchar(' ');
+						chv_putchar_color(' ', color);
 					}
 					char_vga_cursor_x = xy.x;
 					char_vga_cursor_y = xy.y;

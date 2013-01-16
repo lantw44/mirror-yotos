@@ -140,14 +140,19 @@ void char_vga_tobios(void);
 #define KEYDOWN_SCANCODE_KEYPAD_DOT   0x53
 
 /* str_in.c */
-int getstr(char*, int);     
+int getstr(char*, int, int);
 /* 讀入一行的函式
  * ARG1 = 要存到哪裡
  * ARG2 = 最多可以讀多長（'\0' 不計入，但要自行保留空間）
  * RVAL = 實際讀了幾個字 */
 
-int yotrl(char*, const char*, int);     
+int yotrl(char*, const char*, int, int);
 /* 同上，但是是進階版 */
+
+
+/* strbasic.c */
+int strcmp(const char*, const char*);
+int strtos(const char*, unsigned int*);
 
 #endif
 

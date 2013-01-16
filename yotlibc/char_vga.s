@@ -72,8 +72,7 @@ _char_vga_tobios:
 	
 	mov		cx, bx		; preserve bx
 
-	mov		ah, 0x0f
-	int		0x10		; bh is set by int 0x10, ah=0x0f
+	mov		bh, 0x00
 	mov		dl, [_char_vga_cursor_x]
 	mov		dh, [_char_vga_cursor_y]
 	mov		ah, 0x02
