@@ -1,0 +1,8 @@
+*.a
+*.o
+*.img
+55aa
+bootsect
+kernel
+yotsh
+
