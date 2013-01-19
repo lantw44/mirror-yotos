@@ -21,12 +21,6 @@
 #define false 0
 #endif
 
-#define exit(globalvar) \
-	asm "mov sp, bp"; \
-	asm "mov ax, [_" #globalvar "]" ; \
-	asm "pop bp"; \
-	asm "retf"
-
 /* str_out.s */
 void putint(unsigned short);         /* 以 10 進位顯示一個 word (unsigned) */
 void putcharhex(char);      /* 以 16 進位顯示一個 byte */

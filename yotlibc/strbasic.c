@@ -62,6 +62,8 @@ int strtos(str, store)
 			}else{
 				return 0;
 			}
+		}else if(*str == ' ' || *str == '\t' || *str == '\n'){
+			break;
 		}else{
 			return 0; /* Failed */
 		}

@@ -122,6 +122,7 @@ int yotrl(dest, init, maxlen, color)
 		}else{
 			switch(cscan){
 				case KEYDOWN_SCANCODE_ENTER:
+					chv_move_cursor(nowlen - pos);
 					dest[nowlen++] = '\0';
 					if(++char_vga_cursor_y >= CHAR_VGA_SCREENY){
 						char_vga_cursor_y--;
