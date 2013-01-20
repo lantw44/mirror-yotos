@@ -199,9 +199,29 @@ int main(){
 		}else if(!strcmp(argcopy, "reboot")){
 			cp1 = 0;
 			asm "int 0x51";
-		}else if(!strcmp(argcopy, "reload")){
+		}else if(!strcmp(argcopy, "reload") ||
+				!strcmp(argcopy, "reload2") ||
+				!strcmp(argcopy, "yot16") ||
+				!strcmp(argcopy, "yotrm")){
 			cp1=0;
 			return 0;
+		}else if(!strcmp(argcopy, "yot32") ||
+				!strcmp(argcopy, "yotpm") ||
+				!strcmp(argcopy, "protect")){
+			putstr(
+				"WARNING: You cannot run any real mode program "
+				"unless rebooting!\r\n"
+				"Do you want to switch to protected mode ? [no] ");
+			yotrl(cmdline, NULL, 3, 7);
+			if(!strcmp(cmdline, "yes")){
+				return (3 << 12) | 101;
+			}else{
+				if(cmdline[0] == 'y' || cmdline[0] == 'Y'){
+					putstr("You should type `yes\'.\r\n");
+				}else{
+					putstr("Not confirmed.\r\n");
+				}
+			}
 		}else if(!strcmp(argcopy, "loadgarbage")){
 			cp1=0;
 			return 74;
@@ -211,10 +231,6 @@ int main(){
 		}else if(!strcmp(argcopy, "loadstupid")){
 			cp1=0;
 			return 73;
-		}else if(!strcmp(argcopy, "reload2")){
-			cp1=0;
-			/*envsave(env,sizeof(env));*/
-			return 0;
 		}else if(!strcmp(argcopy, "clear") || 
 				!strcmp(argcopy, "cls")){
 			chv_clear();
@@ -247,6 +263,8 @@ int main(){
 				putstr("Syntax: reboot\r\n");
 			}else if(!strcmp(cp2, "reload")){
 				putstr("Syntax: reload\r\n");
+			}else if(!strcmp(cp2, "yot32")){
+				putstr("Syntax: yot32\r\n");
 			}else if(!strcmp(cp2, "loadgarbage") ||
 					!strcmp(cp2, "loadstupid") ||
 					!strcmp(cp2, "loadnull")){
@@ -276,7 +294,9 @@ int main(){
 					"\r\n reboot      "
 					"Reboot the computer"
 					"\r\n reload      "
-					"Reload ??"
+					"Reload the shell"
+					"\r\n yot32       "
+					"Switch to protected mode"
 					"\r\n loadgarbage "
 					"Display some garbage to screen"
 					"\r\n loadstupid  "
