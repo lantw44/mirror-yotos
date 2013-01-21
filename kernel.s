@@ -1,10 +1,22 @@
 	global	_main
 
 _main:
-	mov		sp, 0x7ffe
+	mov		ax, [now_screenid]
+	mov		cx, 0x1000
+	mul		cx
+	sub		ax, 0x1000
+	add		ax, 0x0050
+	mov		[cs:shell_seg], ax
+	
+	mov		sp, 0xF6F6
 	mov		word [local_var_size],local_var_end
 	sub		word [local_var_size],local_var_start
-;--------------------------------------------------
+	mov		ax, word [local_var_size]
+	cmp		ax, 6144
+	je		show_6144
+	call	putint
+	
+show_6144:
 set_environment:
 	xor		ax, ax
 	push	es
@@ -56,7 +68,12 @@ reboot_int:
 	mov		[es:0x146], cs
 	sti
 	jmp		short reboot_int_end
-	mov		al, 0x0F
+	mov		al, 0x0E
+	mov		dx, 0xCF9
+	out		dx, al
+	mov		al, 0x06
+	out		dx, al
+	mov		al, 0xFE
 	out		0x64, al
 	mov		ax,0x0040
 	push	ax
@@ -78,6 +95,7 @@ reboot_int:
 reboot_int_end:
 	pop		es
 ;--------------------------------------------------
+
 set_keyboard_break:
 	xor		ax, ax
 	push	es
@@ -106,102 +124,9 @@ set_keyboard_break:
 
 set_keyboard_end_break:
 	pop		es
-;--------------------------------------------------
-set_timer:
-	xor		ax, ax
-	push	es
-	mov		es, ax
-	db		0xE8
-	add		al, [bx+si]
-	db		0xEB
-	db		0x05
-	pop		ax
-	sub		sp, 2
-	ret
-	add		ax, 0x2C
-	cli
-
-	mov		si, [es:0x20]
-	mov		di, [es:0x22]
-	mov		[es:0x320], si
-	mov		[es:0x322], di
-	mov		[es:0x20], ax
-	mov		[es:0x22], cs
-
-	sti
-	jmp		near set_timer_end
-	int		0xC8
-	pushf
-	cli
-;	pusha
-;	mov		ah, 0x0E
-;	mov		al, '!'
-;	mov		bx, 0x0007
-;	int		0x10
-;	popa
-	cmp		word [cs:break_imm],0x00
 	
-	je		update_timer
 	
-	cmp		word [cs:scancode_processing], 0x00
-	jne		update_timer
-	
-	mov			word [cs:scancode_processing], 0x01
-	mov			ax, [cs:sector_to_load_ax];
-	cmp			word [cs:sector_to_load], 0x3021 ;
-	jne			not_shell_load_break
-	mov			ax, 0xFFFF
-	jmp			shell_load_break
-not_shell_load_break:
-	mov			word [cs:sector_to_load], 0x3021
-	sti
-	popf
-	jmp			program_exit_no_to_save
-shell_load_break:
-	sti
-	popf
-	jmp			program_exit
-	
-update_timer:
-	inc		word [cs:view_step_now]
-;	push	ax
-;	mov		ax, 123
-;	call	putint
-;	pop		ax
-view_screen_timer:
-	cmp		word [cs:view_length], 0x00
-	je		timer_ret
-	cli
-	push	ax
-;	mov		ax, 123
-;	call	putint
-	push	cx
-	mov		ax, [cs:view_step_now]
-	and		ax, [cs:view_delaycnt]
-	cmp		ax, [cs:view_original]
-	jne		not_need_update_view
-	push	es
-	mov		ax, 0xB800
-	mov		es, ax
-	mov		ax, word [cs:view_screenbuffer]
-	mov		cx, word [cs:view_screenbuffer+0x02]
-	mov		word [es:0x009C], ax
-	mov		word [es:0x009E], cx
-	mov		word [cs:view_length], 0x00
-	pop		es
-not_need_update_view:
-	pop		cx
-	pop		ax
-	sti
-timer_ret:
-	sti
-	popf
-	iret
-
-set_timer_end:
-	pop		es
-;--------------------------------------------------
-
+;------------------------------------------------------
 set_keyboard:
 	xor		ax, ax
 	push	es
@@ -232,10 +157,37 @@ code_for_scancode:
 	cmp		ah, 0x4f
 	jne		end_for_scancode
 ;----------------------------------
+	jmp	cencel_10101092
+ 	push	ax
+ 	push	es
+check_kb_buf:
+	xor		ax, ax
+
+	push	ax
+ 	pop		es
+ 	mov		ax, [es:0x41C]
+	sub		ax, [es:0x41A]
+	cmp		ax, 24
+	ja		clear_kb_buf
+	jmp		no_clear_kb_buf
+clear_kb_buf:
+	mov		ax, [es:0x41A]
+	add		ax, 2
+	cmp		ax, 0x3C
+	jbe		gosll
+	mov		ax, 0x1E
+gosll:
+	mov		[es:0x41C], ax
+	xor		ah, ah
+	int		0x16
+	jmp		check_kb_buf
+no_clear_kb_buf:
+	pop		es
+    pop		ax
+cencel_10101092:
 
 ;----------------------------------
 	mov		[cs:scancode_int_buf], al
-
 	push	ax
 	push	bx
 	push	cx
@@ -274,35 +226,68 @@ code_for_scancode:
 	lea		bx, [es:scancodebufp+0x0F]
 	cmp		byte [es:bx], 0x58
 	je		f12_break
-	
-	lea		bx, [es:scancodebufp+0x0F]
-	cmp		byte [es:bx], 0x57
-	je		f11_savescreen
-	
+
 	lea		bx, [es:scancodebufp+0x0F]
 	cmp		byte [es:bx], 0x44
-	je		f10_loadscreen
+	je		f10_showdatetime
 	
 	lea		bx, [es:scancodebufp+0x0F]
 	cmp		byte [es:bx], 0x43
 	je		f9_showinfo
+	
+	lea		bx, [es:scancodebufp+0x0F]
+	cmp		byte [es:bx], 0x3B
+	je		f1_switch_to_screen_1
+	
+	lea		bx, [es:scancodebufp+0x0F]
+	cmp		byte [es:bx], 0x3C
+	je		f2_switch_to_screen_2
+	
+	lea		bx, [es:scancodebufp+0x0F]
+	cmp		byte [es:bx], 0x3D
+	je		f3_switch_to_screen_3
+	
+	lea		bx, [es:scancodebufp+0x0F]
+	cmp		byte [es:bx], 0x3E
+	je		f4_switch_to_screen_4
+	
+	lea		bx, [es:scancodebufp+0x0F]
+	cmp		byte [es:bx], 0x3F
+	je		f5_switch_to_screen_5
+	
+	lea		bx, [es:scancodebufp+0x0F]
+	cmp		byte [es:bx], 0x40
+	je		f6_switch_to_screen_6
+	
+	lea		bx, [es:scancodebufp+0x0F]
+	cmp		byte [es:bx], 0x41
+	je		f7_switch_to_screen_7
+	
+	lea		bx, [es:scancodebufp+0x0F]
+	cmp		byte [es:bx], 0x42
+	je		f8_switch_to_screen_8
 	
 	lea		bx, [es:scancodebufp+0x09]
 	
 	cmp		byte [es:bx], 0xE0
 	jne		not_ctrl_break
 	add		bx, cx
+	
 	cmp		byte [es:bx], 0x46
 	jne		not_ctrl_break
 	add		bx, cx
+	
 	cmp		byte [es:bx], 0xE0
 	jne		not_ctrl_break
 	add		bx, cx
+	
 	cmp		byte [es:bx], 0xC6
 	jne		not_ctrl_break
+	
 f12_break:	
-	cmp		word [cs:scancode_processing], 0x00
-	jne		not_ctrl_break
+
+	mov		word [cs:sector_to_load_ax], ax 
+	
 	xor		bx, bx
 	mov		[es:scancodebuf-0x00], bx
 	mov		[es:scancodebuf-0x02], bx
@@ -310,6 +295,9 @@ f12_break:
 	mov		[es:scancodebuf-0x06], bx
 	mov		[es:scancodebuf-0x08], bx
 	mov		[es:scancodebuf-0x0A], bx
+	
+	cmp		word [cs:scancode_processing], 0x00
+	jne		not_ctrl_break
 	
 	mov		bx, 0x0007
 	mov		ah, 0x0E
@@ -334,51 +322,13 @@ f12_break:
 	int 	0x10
 	mov		al, ']'
 	int 	0x10
-	mov		word [cs:break_imm], 0x01;
-	mov		word [cs:sector_to_load_ax], ax ;
+
+	mov		word [cs:break_imm], 0x01
+	mov		word [cs:scancode_processing], 0x01
 	jmp		not_ctrl_break
-	
-	
-f11_savescreen:
-	
-	push	ds
-	mov		ax, 0xb800
-	mov		ds, ax
-	mov		ax, 0x9850
-	mov		es, ax
-	;ds:si => es:di
-	
-	xor		si, si
-	xor		di, di
-	mov		cx, 1000; 80*25*2
-	rep		movsd
-	pop		ds
-	jmp		not_ctrl_break
-	
-f10_loadscreen:
-	push	ds
-	mov		ax, 0xb800
-	mov		es, ax
-	mov		ax, 0x9850
-	mov		ds, ax
-	;ds:si => es:di
-	
-	xor		si, si
-	xor		di, di
-	mov		cx, 1000; 80*25*2
-	rep		movsd
-	
-	
-	;mov		byte [es:0x0000],'H'
-	;mov		byte [es:0x0001],0x07
-	
-	pop		ds
-	jmp		not_ctrl_break
-	
 	
 f9_showinfo:
 	mov		ax, [cs:view_step_now]
-;	call	putint
 	inc		ax
 	mov		[cs:view_step_now], ax
 	dec		ax
@@ -399,19 +349,717 @@ f9_showinfo:
 	mov		word [cs:view_length], 0x02
 	jmp		not_ctrl_break
 	
+f10_showdatetime:
+	
+	mov		ax, [cs:view_step_now]
+	inc		ax
+	mov		[cs:view_step_now], ax
+	dec		ax
+	and		ax, [cs:view_delaycnt]
+	mov		[cs:view_original], ax
+	mov		ax, 0xB800
+	mov		es, ax
+	mov		bp, 0x74
+	
+	cld
+	
+	mov		cx, 160
+	sub		cx, bp
+	mov		word [cs:view_start], bp
+	mov		word [cs:view_length], cx
+	
+	push	es
+	push	ds
+	push	di
+	push	si
+	
+	push	es
+	pop		ds
+	
+	
+	
+	push	cs
+	pop		es
+	
+	mov		si, bp
+	mov		di, view_screenbuffer
+	
+	rep		movsb
+	
+	pop		si
+	pop		di
+	pop		ds
+	pop		es
+
+	mov		ah, 0x04
+	int		0x1A
+	mov		al, ch
+	xor		ah, ah
+	
+	call	putint_td
+	
+	mov		byte [es:bp],dl
+	inc		bp
+	mov		byte [es:bp],0x4E
+	inc		bp
+	
+	mov		byte [es:bp],dh
+	inc		bp
+	mov		byte [es:bp],0x4E
+	inc		bp
+
+	mov		ah, 0x04
+	int		0x1A
+	mov		al, cl
+	xor		ah, ah
+	call	putint_td
+	
+	mov		byte [es:bp],dl
+	inc		bp
+	mov		byte [es:bp],0x4E
+	inc		bp
+	
+	mov		byte [es:bp],dh
+	inc		bp
+	mov		byte [es:bp],0x4E
+	inc		bp
+	
+	mov		byte [es:bp],'/'
+	inc		bp
+	mov		byte [es:bp],0x4E
+	inc		bp
+	
+	mov		ah, 0x04
+	int		0x1A
+	mov		al, dh
+	xor		ah, ah
+	call	putint_td
+	
+	mov		byte [es:bp],dl
+	inc		bp
+	mov		byte [es:bp],0x4E
+	inc		bp
+	
+	mov		byte [es:bp],dh
+	inc		bp
+	mov		byte [es:bp],0x4E
+	inc		bp
+	
+	mov		byte [es:bp],'/'
+	inc		bp
+	mov		byte [es:bp],0x4E
+	inc		bp
+	
+	mov		al, dl
+	xor		ah, ah
+	call	putint_td
+	
+	mov		byte [es:bp],dl
+	inc		bp
+	mov		byte [es:bp],0x4E
+	inc		bp
+	
+	mov		byte [es:bp],dh
+	inc		bp
+	mov		byte [es:bp],0x4E
+	inc		bp
+	
+	mov		byte [es:bp],' '
+	inc		bp
+	mov		byte [es:bp],0x4E
+	inc		bp
+	
+	mov		ah, 0x02
+	int		0x1A
+	mov		al, ch
+	xor		ah, ah
+	call	putint_td
+	
+	mov		byte [es:bp],dl
+	inc		bp
+	mov		byte [es:bp],0x4E
+	inc		bp
+	
+	mov		byte [es:bp],dh
+	inc		bp
+	mov		byte [es:bp],0x4E
+	inc		bp
+	
+	mov		byte [es:bp],':'
+	inc		bp
+	mov		byte [es:bp],0x4E
+	inc		bp
+	
+	mov		al, cl
+	xor		ah, ah
+	call	putint_td
+	
+	mov		byte [es:bp],dl
+	inc		bp
+	mov		byte [es:bp],0x4E
+	inc		bp
+	
+	mov		byte [es:bp],dh
+	inc		bp
+	mov		byte [es:bp],0x4E
+	inc		bp
+	
+	mov		byte [es:bp],':'
+	inc		bp
+	mov		byte [es:bp],0x4E
+	inc		bp
+	
+	mov		al, dh
+	xor		ah, ah
+	call	putint_td
+	
+	mov		byte [es:bp],dl
+	inc		bp
+	mov		byte [es:bp],0x4E
+	inc		bp
+	
+	mov		byte [es:bp],dh
+	inc		bp
+	mov		byte [es:bp],0x4E
+	inc		bp
+	
+	mov		byte [es:bp],' '
+	inc		bp
+	mov		byte [es:bp],0x4E
+	inc		bp
+	
+	mov		byte [es:bp],'P'
+	inc		bp
+	mov		byte [es:bp],0x4E
+	inc		bp
+	
+	mov		cx, '0'
+	add		cx, word [cs:now_screenid]
+	
+	mov		byte [es:bp],cl
+	inc		bp
+	mov		byte [es:bp],0x4E
+	inc		bp
+	
+	
+	jmp		not_ctrl_break
+	
+f1_switch_to_screen_1:
+	mov		word [cs:to_screenid], 0x1
+	cmp		word [cs:now_screenid], 0x1
+	je		not_ctrl_break
+	mov		word [cs:to_screenid_seg], 0x180
+	jmp		switch_to_screen_all
+	
+f2_switch_to_screen_2:
+	mov		word [cs:to_screenid], 0x2
+	cmp		word [cs:now_screenid], 0x2
+	je		not_ctrl_break
+	mov		word [cs:to_screenid_seg], 0x300
+	jmp		switch_to_screen_all
+	
+f3_switch_to_screen_3:
+	mov		word [cs:to_screenid], 0x3
+	cmp		word [cs:now_screenid],0x3
+	je		not_ctrl_break
+	mov		word [cs:to_screenid_seg], 0x480
+	jmp		switch_to_screen_all
+	
+f4_switch_to_screen_4:
+	mov		word [cs:to_screenid], 0x4
+	cmp		word [cs:now_screenid],0x4
+	je		not_ctrl_break
+	mov		word [cs:to_screenid_seg], 0x600
+	jmp		switch_to_screen_all
+	
+f5_switch_to_screen_5:
+	mov		word [cs:to_screenid], 0x5
+	cmp		word [cs:now_screenid],0x5
+	je		not_ctrl_break
+	mov		word [cs:to_screenid_seg], 0x780
+	jmp		switch_to_screen_all
+	
+f6_switch_to_screen_6:
+	mov		word [cs:to_screenid], 0x6
+	cmp		word [cs:now_screenid],0x6
+	je		not_ctrl_break
+	mov		word [cs:to_screenid_seg], 0x900
+	jmp		switch_to_screen_all
+	
+f7_switch_to_screen_7:
+	mov		word [cs:to_screenid], 0x7
+	cmp		word [cs:now_screenid],0x7
+	je		not_ctrl_break
+	mov		word [cs:to_screenid_seg], 0xA80
+	jmp		switch_to_screen_all
+	
+f8_switch_to_screen_8:
+	mov		word [cs:to_screenid], 0x8
+	cmp		word [cs:now_screenid],0x8
+	je		not_ctrl_break
+	mov		word [cs:to_screenid_seg], 0xC00
+	jmp		switch_to_screen_all
+
+switch_to_screen_all:
+
+	xor		bx, bx
+	mov		[es:scancodebuf-0x00], bx
+	mov		[es:scancodebuf-0x02], bx
+	mov		[es:scancodebuf-0x04], bx
+	mov		[es:scancodebuf-0x06], bx
+	mov		[es:scancodebuf-0x08], bx
+	mov		[es:scancodebuf-0x0A], bx
+	
+	cmp		word [cs:switch_imm], 0x00
+	jne		quit_switch_to_screen_all
+	
+	mov		bx, 0x0007
+	mov		ah, 0x0E
+	mov		al, ' '
+	int 	0x10
+
+	mov		word [cs:switch_imm], 0x01
+	jmp		not_ctrl_break
+
+quit_switch_to_screen_all:
 not_ctrl_break:
-normal_keyboard_break:
 	pop		es
 	pop		dx
 	pop		cx
 	pop		bx
 	pop		ax
+	
 end_for_scancode:
 	popf
 	int		0xD5
+	
 	iret
 set_keyboard_end:
 	pop		es
+
+;--------------------------------------------------
+set_timer:
+	xor		ax, ax
+	push	es
+	mov		es, ax
+	db		0xE8
+	add		al, [bx+si]
+	db		0xEB
+	db		0x05
+	pop		ax
+	sub		sp, 2
+	ret
+	add		ax, 0x2C
+	cli
+
+	mov		si, [es:0x20]
+	mov		di, [es:0x22]
+	mov		[es:0x320], si
+	mov		[es:0x322], di
+	mov		[es:0x20], ax
+	mov		[es:0x22], cs
+	sti
+
+	jmp		near set_timer_end
+	
+	int		0xC8
+	pushf
+	
+;--------------
+
+
+ 	push	ax
+ 	push	es
+ 
+recheck_kb_buf:
+	xor		ax, ax
+
+	push	ax
+	pop		es
+	mov		ax, [es:0x41C]
+	sub		ax, [es:0x41A]
+	cmp		ax, 24
+ 	ja		reclear_kb_buf
+ 	jmp		no_reclear_kb_buf
+reclear_kb_buf:
+	xor		ah, ah
+	int		0x16
+	mov		ax, [es:0x41A]
+	add		ax, 2
+	cmp		ax, 0x3C
+	jbe		gosllww
+	mov		ax, 0x1E
+gosllww:
+	mov		[es:0x41C], ax
+	
+	jmp		recheck_kb_buf
+no_reclear_kb_buf:
+	pop		es
+   pop		ax
+   
+cencel_10101093:
+    
+;--------------------------------------------------
+update_timer:
+	inc		word [cs:view_step_now]
+;--------------------------------------------------
+
+break_imm_function:
+	cli
+	cmp		word [cs:break_imm],0x00
+	je		quit_break_imm_function
+	
+	mov			word [cs:break_imm],0x00
+	mov			word [cs:scancode_processing], 0x02
+	mov			ax, [cs:sector_to_load_ax];
+	cmp			word [cs:sector_to_load], 0x3021 ;
+	jne			break_imm_not_shell_load_break
+	mov			ax, 0xFFFF
+	jmp			break_imm_shell_load_break
+	
+break_imm_not_shell_load_break:
+	mov			word [cs:sector_to_load], 0x3021
+	sti
+	popf
+	jmp			program_exit_no_to_save
+	
+break_imm_shell_load_break:
+	sti
+	popf
+	jmp			program_exit
+quit_break_imm_function:
+	popf
+	pushf
+
+
+;--------------------------------------------------
+view_screen_timer:
+	cmp		word [cs:view_length], 0x00
+	je		quit2_view_screen_timer
+	cli
+	push	ax
+	push	cx
+	
+	mov		ax, [cs:view_step_now]
+	and		ax, [cs:view_delaycnt]
+	cmp		ax, [cs:view_original]
+	jne		quit_view_screen_timer
+	
+	push	es
+	mov		ax, 0xB800
+	mov		es, ax
+	
+	cld
+	
+	mov		cx, [cs:view_length]
+	
+	push	es
+	push	ds
+	push	di
+	push	si
+	
+	push	cs
+	pop		ds
+	
+	nop 
+	nop
+	mov		di, [cs:view_start]
+	mov		si, view_screenbuffer
+	
+	rep		movsb
+	
+	pop		si
+	pop		di
+	pop		ds
+	pop		es
+
+
+	mov		word [cs:view_length], 0x00
+	
+	
+	pop		es
+
+quit_view_screen_timer:
+	pop		cx
+	pop		ax
+quit2_view_screen_timer:
+;--------------------------------------------------
+switch_function:
+	cmp		word [cs:switch_imm],0x00
+	je		quit_switch_function
+	mov		word [cs:switch_imm],0x00
+	cli
+	push	ax
+	push	bx
+	push	cx
+	push	dx
+	push	es
+	push	ds
+	push	ss
+	push	sp
+	push	bp
+	push	si
+	push	di
+	nop
+	nop
+	nop
+	nop
+	
+store_data_to_local:
+
+save_reg_to_now:
+	mov		ax, ss
+	mov		ds, ax
+	mov		ax, cs
+	mov		es, ax
+	mov		si, sp
+	mov		di, register_buf
+	mov		cx, 15
+	cld
+	rep		movsw
+
+	mov		[cs:register_buf+6], sp
+
+save_screen_to_now:
+	mov		ax, 0xb800
+	mov		ds, ax
+	mov		ax, cs
+	mov		es, ax
+	mov		si, 0x0
+	mov		di, screen_data_buf
+	mov		cx, 1000
+	cld
+	rep		movsd
+
+save_bda_to_now:
+	mov		ax, 0x40
+	mov		ds, ax
+	mov		ax, cs
+	mov		es, ax
+	mov		si, 0x0
+	mov		di, bios_bda_databuf
+	mov		cx, 64
+	cld
+	rep		movsd
+	
+save_ebda_to_now:
+	mov		ax, 0x9FC0
+	mov		ds, ax
+	mov		ax, cs
+	mov		es, ax
+	mov		si, 0x0
+	mov		di, bios_ebda_databuf
+	mov		cx, 256
+	cld
+	rep		movsd
+
+save_now_to_archive:	
+	mov		ax, cs
+	mov		ds, ax
+	mov		ax, [cs:now_screenid]
+	mov		cx, 0x180
+	mul		cx
+	mov		cx, cs ; 6kb
+	add		ax, cx
+	mov		es, ax
+	mov		si, local_var_start; now
+	mov		di, local_var_start; 1
+	mov		cx, [cs:local_var_size]
+	cld
+	rep		movsb
+	
+load_new_to_now:	
+	mov		ax, cs
+	mov		es, ax
+	mov		ax, [cs:to_screenid]
+	mov		cx, 0x180
+	mul		cx
+	mov		cx, cs ; 6kb
+	add		ax, cx
+	mov		ds, ax
+	mov		di, local_var_start; now
+	mov		si, local_var_start; 1
+	mov		cx, [cs:local_var_size]
+	cld
+	rep		movsb
+	
+load_now_to_screen:
+	mov		ax, 0xb800
+	mov		es, ax
+	mov		ax, cs
+	mov		ds, ax
+	mov		di, 0x0
+	mov		si, screen_data_buf
+	mov		cx, 1000
+	cld
+	rep		movsd
+load_now_to_bda:
+	mov		ax, 0x40
+	mov		es, ax
+	mov		ax, cs
+	mov		ds, ax
+	mov		di, 0x0
+	mov		si, bios_bda_databuf
+	mov		cx, 64
+	cld
+	rep		movsd
+	
+load_now_to_ebda:
+	mov		ax, 0x9FC0
+	mov		es, ax
+	mov		ax, cs
+	mov		ds, ax	
+	mov		di, 0x0
+	mov		si, bios_ebda_databuf
+	mov		cx, 256
+	cld
+	rep		movsd
+
+load_now_prework:
+	mov		sp, [cs:register_buf+6]
+	mov		ss, [cs:register_buf+8]
+	
+load_now_to_reg:
+	mov		ax, ss
+	mov		es, ax
+	mov		ax, cs
+	mov		ds, ax
+	mov		di, sp
+	mov		si, register_buf
+	mov		cx, 15
+	cld
+	rep		movsw
+	
+	
+	
+	pop		di
+	pop		si
+	pop		bp
+	pop		ax
+	pop		ax
+	pop		ds
+	
+	
+	
+	
+	
+	mov		dx, 0x3D4
+	mov		al, 0x0E
+	out		dx, al			; read high byte
+
+	mov		dx, 0x3D5
+	in		al, dx
+	mov		ch, al
+
+	mov		dx, 0x3D4
+	mov		al, 0x0F
+	out		dx, al			; read low byte
+
+	mov		dx, 0x3D5
+	in		al, dx
+	mov		cl, al
+
+	mov		dx, 0x3D4
+	mov		al, 0x0E
+	out		dx, al			; send high byte
+
+	mov		dx, 0x3D5
+	mov		al, ch
+	out		dx, al
+
+	mov		dx, 0x3D4
+	mov		al, 0x0F
+	out		dx, al			; send low byte
+
+	mov		dx, 0x3D5
+	mov		al, cl
+	out		dx, al
+	
+	pop		es
+	pop		dx
+	pop		cx
+	pop		bx
+	pop		ax
+	push	ax
+	push	bx
+	push	cx
+	push	dx
+	push	es
+	
+	mov		ax, [cs:view_step_now]
+	inc		ax
+	mov		[cs:view_step_now], ax
+	dec		ax
+	and		ax, [cs:view_delaycnt]
+	mov		[cs:view_original], ax
+	mov		ax, 0xB800
+	mov		es, ax
+	cmp		word [cs:view_length], 0x00
+	jne		not_need_savscr
+	mov		ax, word [es:0x009C]
+	mov		cx, word [es:0x009E]
+	mov		word [cs:view_start], 0x9C
+	mov		word [cs:view_screenbuffer], ax
+	mov		word [cs:view_screenbuffer+0x02], cx
+	mov		word [cs:view_length], 0x04
+not_need_savscr:
+	mov		cx, '0'
+	add		cx, word [cs:now_screenid]
+	mov		byte [es:0x009C],cl
+	mov		byte [es:0x009D],0x4E
+	mov		cx, '0'
+	add		cx, word [cs:to_screenid]
+	mov		byte [es:0x009E],cl
+	mov		byte [es:0x009F],0x4E
+	
+	
+	mov		ax, [cs:to_screenid]
+	mov		cx, 0x1000
+	mul		cx
+	sub		ax, 0x1000
+	add		ax, 0x0050
+	mov		[cs:shell_seg], ax
+	mov		ax, [cs:to_screenid]
+	mov		[cs:now_screenid], ax
+
+	pop		es
+	pop		dx
+	pop		cx
+	pop		bx
+	pop		ax	
+
+check_is_it_not_loadshell:
+	cmp		word [cs:register_buf+24], start_point
+	nop
+	nop
+	nop
+	jne		quit_switch_function
+
+	mov		sp, [cs:initialize_sp]
+	mov		ax, start_point
+	mov		bx, cs
+	mov		es, bx
+	mov		ss, bx
+	mov		ds, bx
+	push		ax
+
+	ret
+	rdtsc
+	
+
+quit_switch_function:
+;--------------------------------------------------
+timer_ret:
+	
+	
+	
+	popf
+	iret
+
+set_timer_end:
+	pop		es
+;--------------------------------------------------
+
 ;--------------------------------------------------
 set_envbuf:
 	xor		ax, ax
@@ -443,7 +1091,7 @@ set_envbuf:
 set_envbuf_end:
 	pop		es
 ;--------------------------------------------------	
-save_envbuf: ; 0x53
+save_envbuf:
 	xor		ax, ax
 	push	es
 	mov		es, ax
@@ -465,7 +1113,7 @@ save_envbuf: ; 0x53
 save_envbuf_end:
 	pop		es
 ;--------------------------------------------------	
-load_envbuf: ; 0x54
+load_envbuf:
 	xor		ax, ax
 	push	es
 	mov		es, ax
@@ -487,11 +1135,370 @@ load_envbuf: ; 0x54
 load_envbuf_end:
 	pop		es
 ;--------------------------------------------------	
+
+jmp envbuf_functions_end
+
+load_env_buf_intcall:
+	push	di
+	push	ds
+	push	es
+	push	cx
+	push	si
+	pushf
+	cld
+	push	ds
+	pop		es
+	push	cs
+	pop		ds
+	mov		cx, [cs:yotshell_sizeofenv]
+	cmp		cx, 0xBAAD
+	je		load_env_buf_unseted
+	xor		ax, ax
+	cmp		[cs:yotshell_envseted], ax
+	je		load_env_buf_unseted
+	mov		ax, cx
+	mov		di, [cs:yotshell_ptrofenv]
+	mov		si, yotshell_env_buf
+	cld
+	rep		movsb
+	
+	jmp		load_env_buf_step2
+load_env_buf_unseted:
+	xor		ax, ax
+load_env_buf_step2:
+	popf
+	pop		si	
+	pop		cx
+	pop		es
+	pop		ds
+	pop		di
+	ret
+
+save_env_buf:
+	push	di
+	push	ds
+	push	cx
+	push	ax
+	push	si
+	pushf
+	push	ds
+	pop		es
+	cld
+	mov		cl, 0x01
+	mov		[yotshell_envseted], cl
+	mov		cx, [yotshell_sizeofenv]
+	cmp		cx, 0xBAAD
+	je		save_env_buf_unseted
+	mov		si, [yotshell_ptrofenv]
+	mov		di, yotshell_env_buf
+	mov		ax, [shell_seg]
+	mov		ds, ax
+	cld
+	rep		movsb
+save_env_buf_unseted:
+	popf
+	pop		si
+	pop		ax
+	pop		cx
+	pop		ds
+	pop		di
+	ret
+	
+save_env_buf_intcall:
+	push	di
+	push	es
+	push	cx
+	push	ax
+	push	si
+	pushf
+	cld
+	mov		ax, [ds:0xFFFE]
+	mov		es, ax
+	mov		cl, 0x01
+	mov		[es:yotshell_envseted], cl
+	mov		cx, [es:yotshell_sizeofenv]
+	cmp		cx, 0xBAAD
+	je		save_env_buf_unseted_intcall
+save_env_buf_unseted_intcall:
+	mov		si, [es:yotshell_ptrofenv]
+	mov		di, yotshell_env_buf
+	cld
+	rep		movsb
+	popf
+	pop		si
+	pop		ax
+	pop		cx
+	pop		es
+	pop		di
+	ret
+envbuf_functions_end:
+
+	mov		word [initialize_sp], sp
+	pushf
+	push	cs
+	mov		ax, start_point
+	push	ax
+	pushf
+	push	ax
+	push	bx
+	push	cx
+	push	dx
+	push	es
+	push	ds
+	push	ss
+	push	sp
+	push	bp
+	push	si
+	push	di
+	
+	push	es
+
+	
+	mov		ax, 0x0050
+	push	ax
+	pop		es
+	mov		bx, 0xFFFF
+	mov		cx, 0xFFFF	
+loop0050:
+	mov		byte [es:bx], 0x0
+	dec		bx
+	loop	loop0050
+	
+	mov		ax, 0x1050
+	push	ax
+	pop		es
+	mov		bx, 0xFFFF
+	mov		cx, 0xFFFF	
+loop1050:
+	mov		byte [es:bx], 0x0
+	dec		bx
+	loop	loop1050
+	
+	mov		ax, 0x2050
+	push	ax
+	pop		es
+	mov		bx, 0xFFFF
+	mov		cx, 0xFFFF
+loop2050:
+	mov		byte [es:bx], 0x0
+	dec		bx
+	loop	loop2050
+	
+	mov		ax, 0x3050
+	push	ax
+	pop		es
+	mov		bx, 0xFFFF
+	mov		cx, 0xFFFF
+loop3050:
+	mov		byte [es:bx], 0x0
+	dec		bx
+	loop	loop3050
+	
+	mov		ax, 0x4050
+	push	ax
+	pop		es
+	mov		bx, 0xFFFF
+	mov		cx, 0xFFFF
+loop4050:
+	mov		byte [es:bx], 0x0
+	dec		bx
+	loop	loop4050
+	
+	mov		ax, 0x5050
+	push	ax
+	pop		es
+	mov		bx, 0xFFFF
+	mov		cx, 0xFFFF
+loop5050:
+	mov		byte [es:bx], 0x0
+	dec		bx
+	loop	loop5050
+	
+	mov		ax, 0x6050
+	push	ax
+	pop		es
+	mov		bx, 0xFFFF
+	mov		cx, 0xFFFF
+loop6050:
+	mov		byte [es:bx], 0x0
+	dec		bx
+	loop	loop6050
+	
+	mov		ax, 0x7050
+	push	ax
+	pop		es
+	mov		bx, 0xFFFF
+	mov		cx, 0xFFFF
+loop7050:
+	mov		byte [es:bx], 0x0
+	dec		bx
+	loop	loop7050
+	
+	mov		ax, 0x8050
+	push	ax
+	pop		es
+	mov		bx, 0xFFFF
+	mov		cx, 0xFFFF
+loop8050:
+	mov		byte [es:bx], 0x0
+	dec		bx
+	loop	loop8050
+	
+
+
+
+	
+	pop		es
+		
+init_save_reg_to_now:
+	mov		ax, ss
+	mov		ds, ax
+	mov		ax, cs
+	mov		es, ax
+	mov		si, sp
+	mov		di, register_buf
+	mov		cx, 15
+	cld
+	rep		movsw
+	
+
+
+
+	
+	add		sp, 30
+	sub		word [cs:register_buf+6], 8
+
+
+	
+init_save_screen_to_now:
+	mov		ax, 0xb800
+	mov		ds, ax
+	mov		ax, cs
+	mov		es, ax
+	mov		si, 0x0
+	mov		di, screen_data_buf
+	mov		cx, 1000
+	cld
+	rep		movsd
+
+init_save_bda_to_now:
+	mov		ax, 0x40
+	mov		ds, ax
+	mov		ax, cs
+	mov		es, ax
+	mov		si, 0x0
+	mov		di, bios_bda_databuf
+	mov		cx, 64
+	cld
+	rep		movsd
+	
+init_save_ebda_to_now:
+	mov		ax, 0x9FC0
+	mov		ds, ax
+	mov		ax, cs
+	mov		es, ax
+	mov		si, 0x0
+	mov		di, bios_ebda_databuf
+	mov		cx, 256
+	cld
+	rep		movsd
+	
+to_archive_1:	
+	mov		ax, cs
+	mov		ds, ax
+	add		ax, 0x180 
+	mov		es, ax
+	mov		si, local_var_start
+	mov		di, local_var_start
+	mov		cx, [cs:local_var_size]
+	cld
+	rep		movsb
+	
+	
+to_archive_2:	
+	mov		ax, cs
+	mov		ds, ax
+	add		ax, 0x300 ; 6kb
+	mov		es, ax
+	mov		si, local_var_start;
+	mov		di, local_var_start;
+	mov		cx, [cs:local_var_size]
+	cld
+	rep		movsb
+	
+to_archive_3:	
+	mov		ax, cs
+	mov		ds, ax
+	add		ax, 0x480 ; 6kb
+	mov		es, ax
+	mov		si, local_var_start;
+	mov		di, local_var_start;
+	mov		cx, [cs:local_var_size]
+	cld
+	rep		movsb
+	
+to_archive_4:	
+	mov		ax, cs
+	mov		ds, ax
+	add		ax, 0x600 ; 6kb
+	mov		es, ax
+	mov		si, local_var_start;
+	mov		di, local_var_start;
+	mov		cx, [cs:local_var_size]
+	cld
+	rep		movsb
+	
+to_archive_5:	
+	mov		ax, cs
+	mov		ds, ax
+	add		ax, 0x780 ; 6kb
+	mov		es, ax
+	mov		si, local_var_start;
+	mov		di, local_var_start;
+	mov		cx, [cs:local_var_size]
+	cld
+	rep		movsb
+	
+to_archive_6:	
+	mov		ax, cs
+	mov		ds, ax
+	add		ax, 0x900 ; 6kb
+	mov		es, ax
+	mov		si, local_var_start;
+	mov		di, local_var_start;
+	mov		cx, [cs:local_var_size]
+	cld
+	rep		movsb
+	
+to_archive_7:	
+	mov		ax, cs
+	mov		ds, ax
+	add		ax, 0xA80 ; 6kb
+	mov		es, ax
+	mov		si, local_var_start;
+	mov		di, local_var_start;
+	mov		cx, [cs:local_var_size]
+	cld
+	rep		movsb
+	;mov		word [es:register_buf+2], 0x6050
+	
+to_archive_8:	
+	mov		ax, cs
+	mov		ds, ax
+	add		ax, 0xC00 ; 6kb
+	mov		es, ax
+	mov		si, local_var_start;
+	mov		di, local_var_start;
+	mov		cx, [cs:local_var_size]
+	cld
+	rep		movsb
+	
+;--------------------------------------------------
+start_point:
+	
+	nop	
 load_shell_from_floppy:
-;	xor		ax, ax 
-;	xor		ah, ah
-;	xor		dl, dl
-;	int		0x13
+	sti
 	xor			bx, bx
 	mov		[scancodebuf-0x00], bx
 	mov		[scancodebuf-0x02], bx
@@ -500,33 +1507,19 @@ load_shell_from_floppy:
 	mov		[scancodebuf-0x08], bx
 	mov		[scancodebuf-0x0A], bx
 	mov		word [cs:break_imm], bx
-	mov		word [cs:scancode_processing], 0x00
-;continue_get_key_buf:
-	;xor		ax, ax
-	;inc		ax
-	push	ax
-	push	es
-	mov		ax, 0x40
-	mov		es, ax
-	mov		ax, 0x30
-	mov		[es:0x1A], ax
-	mov		[es:0x1C], ax
-	;mov		ax, [es:0x1A]
-	;call	putint
-	;mov		ax, [es:0x1C]
-	;call	putint
-	pop		es
-	pop		ax
 	
-	;mov		ah, 0x01
-	;int		16h
-	;jz		continue_get_key_buf
+	L1:	mov ah,11h 	; check keyboard buffer
+	int 16h 	; any key pressed?
+	jz  noKey 	; no: exit now
+	mov ah,10h 	; yes: remove from buffer
+	int 16h
+	jmp L1 	; no: check buffer again
+
+noKey: 	; no key pressed
+	or  al,1 	; clear zero flag
 
 	mov		ax, [shell_seg]
 	mov		es, ax
-	
-	; start loading
-	; mov		si, cx
 	
 	mov		ax, [sector_to_load]		; sector offset ; 10
 	dec		ax
@@ -535,105 +1528,55 @@ load_shell_from_floppy:
 	shr		dx, 0x0C
 	inc		dx
 	shl		dx, 0x03
+
+	mov		cx,0xFFFF
+	a0fffloop:
+		dec		cx
+	loopnz	a0fffloop
+	mov		cx,0xFFFF
+	a0fffloop1:
+		dec		cx
+	
+	loopnz	a0fffloop1
+	mov		cx,0xFFFF
+	a0fffloop2:
+		dec		cx
+	
+	loopnz	a0fffloop2
+	mov		cx,0xFFFF
+	a0fffloop3:
+		dec		cx
+	
+	loopnz	a0fffloop3
+	mov		cx,0xFFFF
+	a0fffloop4:
+		dec		cx
+	
+	loopnz	a0fffloop4
+	mov		cx,0xFFFF
+	a0fffloop5:
+		dec		cx
+	
+	loopnz	a0fffloop5
 	
 	call	convchs
 	cmp		ax, 0xFEFE; 0xFEFE & 0xFFF - 1
 	je		load_nothing_img
 	
-;	pusha
-;	call	putint
-;	mov	ax, bx
-;	call	putint
-;	mov	ax, cx
-;	call	putint
-;	mov	ax, dx
-;	call	putint
-;	mov	ax, es
-;	call	putint
-;	mov	ax, 9999
-;	call	putint
-;	popa
-	
-	;pusha
-	;call	putint
-	;popa
-	
 	call	convchsformat
 	xor			bx, bx
-	;mov		bx, 0x0000		; es:bx
-	;mov		al, 16
-	;mov		bx, 0x0000
-	;mov		ah, 0x02	; function: read disk sectors
-	;mov		al, 16		; sector count
-	;xor		dx, dx
-	;mov		cx, [sector_to_load]		; sector offset ; 10
-	
-;	pusha
-;	call	putint
-;	mov	ax, bx
-;	call	putint
-;	mov	ax, cx
-;	call	putint
-;	mov	ax, dx
-;	call	putint
-;	mov	ax, es
-;	call	putint
-;	popa
-	
-	
-;	cmp		cx, 0xF
-;	jne		load_nothing_img
-
-	
+	xor		si, si
+	xor		di, di
 	int		0x13
-	jc 		load_shell_failed
-	
-	
-;	pusha
-;	call	putint
-;	mov		ax, cx
-;	call	putint
-;	mov		ax, dx
-;	call	putint
-;	popa
-	
-	;mov		ah, 0x02	; function: read disk sectors
-	;mov		al, 16		; sector count
-	;mov		dh, 0		; head
-	;mov		dl, 0		; drive number
-	;xor		dx, dx
-	;mov		ch, 0		; track  ;0
-	;mov		cl, [sector_to_load]		; sector offset ; 10
-	
-	int		0x13
-	jc 		load_shell_failed
 	jmp		load_disk_ok
 	
 load_nothing_img:
 	jmp 		load_shell_failed
-;	mov		byte [es:bx] , 0x33
-;	mov		byte [es:bx+1],0xC0
-;	mov		byte [es:bx+2],0xC3 ;RET
-;	xor		ax, ax
-;	mov		ax, 0x8050
-;	mov		es, ax
-;	mov		bx, 0x1200
-;	mov		ah, 0x02	; function: read disk sectors
-;	mov		al, 7		; sector count
-;	mov		dh, 0		; head
-;	mov		dl, 0		; drive number
-;	mov		ch, 1		; track 
-;	mov		cl, 1		; sector offset
-	
-;	int		0x13
-;	jc 		load_shell_failed
 ;--------------------------------------------------
 load_disk_ok:
 view_loader_message:
 	mov		ah, 0x0e
-	;mov		al, ':'
 	mov		bx, 0x0007
-	;int		0x10
 	mov		al, 0x0d
 	int		0x10
 	mov		al, 0x0a
@@ -657,6 +1600,7 @@ real_loader:
 	jmp		program_exit
 ;--------------------------------------------------
 load_shell_failed:
+	call	putint
 	mov		bx, 0x0007
 	mov		ah, 0x0E
 	mov		al, 'L'
@@ -706,28 +1650,52 @@ load_prog_failed_str_continue:
 	int		0x10
 	mov		al, ' '
 	int		0x10
-;	mov		al, 0x0D
-;	int		0x10
-;	mov		al, 0x0A
-;	int		0x10
 	cmp		word [sector_to_load], 0x3021
 	je		shell_call_load_failed
 	mov		word [sector_to_load], 0x3021
 shell_call_load_failed:
 	jmp		load_shell_from_floppy
 ;--------------------------------------------------
+very_very_far_func:
+
+	mov		si, 0xF6F6
+	mov		[si], sp
+	
+	mov		bx, [shell_seg]
+	mov		ds, bx
+	mov		es, bx
+	mov		ss, bx
+	mov		bx, 0xFFFF
+	mov		si, bx
+	mov		dx, 0xFFF8
+	mov		sp, dx
+	mov		bp, dx
+	mov		[si-0x0001], cs
+	add		ax, 0x0A
+	mov		[si-0x0003], ax
+	mov		dl, 0xFA
+	mov		[si-0x0007], dx
+	mov		dl, 0x5A
+	mov		[si-0x0005], dl
+	mov		dl, 0xCB
+	mov		[si-0x0004], dl
+	mov		word [cs:scancode_processing], 0x00
+	mov		word [cs:ok_for_once_shell], 0x01
+	
+	db		0xEA
+	dw		0x0000
+shell_seg:
+	dw		0x0050
+
+;--------------------------------------------------
 program_exit_no_to_save:
-	mov		word [cs:scancode_processing], 0x01
-	mov		sp, [cs:0x7FFE]
+	mov		word [cs:scancode_processing], 0x02
+	mov		sp, [cs:0xF6F6]
 	mov		bx, cs
 	mov		ds, bx
 	mov		es, bx
 	mov		ss, bx
 	
-	;cli
-	;mov		si, 0x7FFE
-	
-	;sti
 	mov		dx, ax
 
 	mov		bx, 0x0007
@@ -758,8 +1726,6 @@ program_exit_no_to_save:
 	int		0x10
 	mov		al, ' '
 	int		0x10
-;	mov		al, ' '
-;	int		0x10
 	mov		ax, dx
 	call	putint
 
@@ -767,29 +1733,14 @@ program_exit_no_to_save:
 	jmp		load_shell_from_floppy
 ;--------------------------------------------------
 program_exit:
-;	mov		al, 'E'
-;	mov		ah, 0x0E
-;	int		0x10
-;	mov		ax, cs
-;	call 	putint
-	mov		word [cs:scancode_processing], 0x01
-	mov		sp, [cs:0x7FFE]
+
+	mov		word [cs:scancode_processing], 0x02
+	mov		sp, [cs:0xF6F6]
 	mov		bx, cs
 	mov		ds, bx
 	mov		es, bx
 	mov		ss, bx
-	;mov		si, 0x7FFE
-	;mov		sp, [si]
 	mov		dx, ax
-;	pop		dx
-;	call	char_vga_setbios
-	
-;	mov		bx, 0x0007
-;	mov		ah, 0x0E
-;	mov		al, 0x0D
-;	int		0x10
-;	mov		al, 0x0A
-;	int		0x10
 	cmp		word [sector_to_load], 0x3021
 	jne		not_shell_successful_call
 	cmp		dx, 0xFFFF
@@ -875,16 +1826,6 @@ not_shell_successful_call:
 
 	mov		ax, dx
 	call	putint
-	;mov		bx, 0x0007
-	;mov		ah, 0x0E
-	;mov		al, 'E'
-	;int		0x10
-	;mov		ax, sp
-	;call	putint
-	;int 	0x10
-	;db		0xEB, 0xFE
-	;jmp		_main
-	;jmp		view_loader_message
 not_to_need_show_exitcode:
 	
 
@@ -906,6 +1847,7 @@ shell_call_continue2:
 not_to_save:
 	mov		[sector_to_load], ax
 	jmp		load_shell_from_floppy
+
 ;--------------------------------------------------
 putint:				; ax=argument
 	pusha
@@ -931,65 +1873,140 @@ putint:				; ax=argument
 		cmp		di, 0
 		ja		putint_print
 	
-	;mov		ah, 0x0e
-	;mov		bx, 0x0007
-	;mov		al, ','
-	;int		0x10
+	mov		ah, 0x0e
+	mov		bx, 0x0007
 	
 	popa
 	ret
 ;--------------------------------------------------
-very_very_far_func:
-;	call	char_vga_savebios
-;	push	dx
-;	call	load_env_buf
-
-	mov		si, 0x7FFE
-	mov		[si], sp
-	
-	mov		bx, [shell_seg]
-	cli
-	mov		ds, bx
-	mov		es, bx
-	mov		ss, bx
-	mov		bx, 0xFFFF
-	mov		si, bx
-	mov		dx, 0xFFF8
-	mov		sp, dx
-	mov		bp, dx
-	sti
-	mov		[si-0x0001], cs
-	add		ax, 0x0A
-	mov		[si-0x0003], ax
-	mov		dl, 0xFA
-	mov		[si-0x0007], dx
-	mov		dl, 0x5A
-	mov		[si-0x0005], dl
-	mov		dl, 0xCB
-	mov		[si-0x0004], dl
-	db		0xEA
-	dw		0x0000
-shell_seg:
-	dw		0x8050
-	;jmp		0x8050:0x0000
+putint_td:				; ax=argument
+	push	cx
+	mov		cl, al
+	push	bx
+	push	ax
+	mov		ah, 0x0e
+	mov		bx, 0x0007
+	mov		al, cl
+	and		al, 0xf0
+	shr		al, 4
+	call	fourbit2hex
+	mov		dl, al
+	mov		al, cl
+	and 	al, 0x0f
+	call	fourbit2hex
+	mov		dh, al
+	pop		ax
+	pop		bx
+	pop		cx
+	ret
 ;--------------------------------------------------
-char_vga_setbios:
-	mov		cx, bx		; preserve bx
-	mov		ah, 0x0f
-	int		0x10		; bh is set by int 0x10, ah=0x0f
-	mov		ah, 0x02
+putint_ptr:				; ax=argument
+	pusha
+	mov		ah, 0x0e
+	mov		bx, 0x0007
+	mov		al, '['
 	int		0x10
-	mov		bx, cx		; restore bx
+	popa
+	pusha
+	mov		di, 0	; dest index
+	mov		si, 10	; divisor, ax=dividend
+	putint_divloop_ptr:
+		mov		dx, 0	; clear upper bits
+		div		si
+		add		dx, '0'
+		mov		byte [putintbuf+di], dl
+		inc		di
+		cmp		ax, 0
+		ja		putint_divloop_ptr
+
+	mov		ah, 0x0e
+	mov		bx, 0x0007
+	
+	putint_print_ptr:
+		dec		di
+		mov		al, byte [putintbuf+di]
+		int		0x10
+		cmp		di, 0
+		ja		putint_print_ptr
+	
+	mov		ah, 0x0e
+	mov		bx, 0x0007
+	mov		al, ']'
+	int		0x10
+	
+	popa
+	ret
+;--------------------------------------------------
+putint_sp:				; ax=argument
+	pusha
+	mov		ah, 0x0e
+	mov		bx, 0x0007
+	mov		al, '{'
+	int		0x10
+	popa
+	pusha
+	putint_divloop_sp:
+		mov		dx, 0	; clear upper bits
+		div		si
+		add		dx, '0'
+		mov		byte [putintbuf+di], dl
+		inc		di
+		cmp		ax, 0
+		ja		putint_divloop_sp
+
+	mov		ah, 0x0e
+	mov		bx, 0x0007
+	
+	putint_print_sp:
+		dec		di
+		mov		al, byte [putintbuf+di]
+		int		0x10
+		cmp		di, 0
+		ja		putint_print_sp
+	
+	mov		ah, 0x0e
+	mov		bx, 0x0007
+	mov		al, '}'
+	int		0x10
+	
+	popa
+	ret
+;--------------------------------------------------
+putint_bp:				; ax=argument
+	pusha
+	mov		ah, 0x0e
+	mov		bx, 0x0007
+	mov		al, '@'
+	int		0x10
+	popa
+	pusha
+	putint_divloop_bp:
+		mov		dx, 0	; clear upper bits
+		div		si
+		add		dx, '0'
+		mov		byte [putintbuf+di], dl
+		inc		di
+		cmp		ax, 0
+		ja		putint_divloop_bp
+
+	mov		ah, 0x0e
+	mov		bx, 0x0007
+	
+	putint_print_bp:
+		dec		di
+		mov		al, byte [putintbuf+di]
+		int		0x10
+		cmp		di, 0
+		ja		putint_print_bp
+	
+	mov		ah, 0x0e
+	mov		bx, 0x0007
+	mov		al, '!'
+	int		0x10
+	
+	popa
 	ret
 	
-char_vga_savebios:
-	mov		cx, bx		; preserve bx
-	mov		ah, 0x0f
-	int		0x10		; bh is set by int 0x10, ah=0x0f
-	mov		ah, 0x03
-	int		0x10
-	mov		bx, cx		; restore bx
-	ret
 putcharhex:
 	push	dx
 	push	ax
@@ -1018,105 +2035,8 @@ fourbit2hex_alpha:
 	add		al, 'A' - 10
 	ret	
 
-load_env_buf_intcall:
-	push	di
-	push	ds
-	push	es
-	push	cx
-	push	si
-	pushf
-	cld
-	push	ds
-	pop		es
-	push	cs
-	pop		ds
-	;mov		ax, cs;[ds:0xFFFE]
-	;mov		ds, ax
-	mov		cx, [cs:yotshell_sizeofenv]
-	cmp		cx, 0xBAAD
-	je		load_env_buf_unseted
-	xor		ax, ax
-	cmp		[cs:yotshell_envseted], ax
-	je		load_env_buf_unseted
-	mov		ax, cx
-	;pusha
-	;call	putint
-	;popa
-	mov		di, [cs:yotshell_ptrofenv]
-	mov		si, yotshell_env_buf
-	rep		movsb
-	
-	jmp		load_env_buf_step2
-load_env_buf_unseted:
-	xor		ax, ax
-load_env_buf_step2:
-	popf
-	pop		si	
-	pop		cx
-	pop		es
-	pop		ds
-	pop		di
-	ret
-
-save_env_buf:
-	push	di
-	push	ds
-	push	cx
-	push	ax
-	push	si
-	pushf
-	push	ds
-	pop		es
-	cld
-	mov		cl, 0x01
-	mov		[yotshell_envseted], cl
-	mov		cx, [yotshell_sizeofenv]
-	cmp		cx, 0xBAAD
-	je		save_env_buf_unseted
-	mov		si, [yotshell_ptrofenv]
-	mov		di, yotshell_env_buf
-	mov		ax, [shell_seg]
-	mov		ds, ax
-	rep		movsb
-save_env_buf_unseted:
-	popf
-	pop		si
-	pop		ax
-	pop		cx
-	pop		ds
-	pop		di
-	ret
-	
-save_env_buf_intcall:
-	push	di
-	push	es
-	push	cx
-	push	ax
-	push	si
-	pushf
-	cld
-	mov		ax, [ds:0xFFFE]
-	mov		es, ax
-	mov		cl, 0x01
-	mov		[es:yotshell_envseted], cl
-	mov		cx, [es:yotshell_sizeofenv]
-	cmp		cx, 0xBAAD
-	je		save_env_buf_unseted_intcall
-save_env_buf_unseted_intcall:
-	mov		si, [es:yotshell_ptrofenv]
-	mov		di, yotshell_env_buf
-	rep		movsb
-	popf
-	pop		si
-	pop		ax
-	pop		cx
-	pop		es
-	pop		di
-	ret
-
 convchs: ; LBA=AX; CHS = CBA
 	pushf
-;	call	putint
 	cmp		ax, 32; 0x3021
 	je		vaild_LBA
 	cmp		ax, word [chs_minium]
@@ -1154,7 +2074,6 @@ invaild_LBA:
 	mov		ax, 0xFEFE
 	popf
 	ret
-;	mov		ax, 9; 0x3021
 vaild_LBA:
 	push	dx
 	xor		dx, dx
@@ -1173,11 +2092,6 @@ vaild_LBA:
 	ret
 	
 convchsformat: ; c:h:s = cx:bx:ax 
-	;mov		[convchsformat_buf_c], cx
-	;mov		[convchsformat_buf_h], bx
-	;mov		[convchsformat_buf_s], ax
-	;mov		[convchsformat_buf_num], dx
-	
 	xchg	ch, cl
 	shl		cl, 0x06
 	add		cl, al
@@ -1186,16 +2100,8 @@ convchsformat: ; c:h:s = cx:bx:ax
 	xor		dl, dl
 	mov		dh, bl
 
-	;mov		ah, [convchsformat_buf_num]
-	
 	ret
 
-;convchsformat_buf_c: dw 0x0
-;convchsformat_buf_h: dw 0x0
-;convchsformat_buf_s: dw 0x0
-;convchsformat_buf_num: dw 0x0
-
-;global var
 putintbuf: times 5 db 0
 break_imm: dw 0x00
 scancodebufp: times 7 dw 0 
@@ -1208,23 +2114,35 @@ chs_maxium: dw 2880;2880
 view_delaycnt: dw 15; 2^7
 view_step_now: dw 0x0
 view_original: dw 0x0; 2^7
-view_screenbuffer: times 16 dw 0
+view_screenbuffer: times 256 dw 0
 view_length: dw 0
+view_start: dw 0
 now_screenid:	dw 0x1
-scancode_processing:	dw 0x1 ; disable
+now_screen_seg:	dw 0x1
+to_screenid:	dw 0x1
+to_screenid_seg:	dw 0x1
+scancode_processing:	dw 0x2 ; disable
+initialize_sp: dw 0
+ok_for_once_shell: dw 0
+switch_imm: dw 0 
+
+local_var_size: dw 0
 
 local_var_start:
 ;-----------------------------------:
 ;local_var
-sector_to_load: dw 0x3021
-sector_to_load_ax: dw 0xAAAA
-yotshell_sizeofenv: dw 0xBAAD ; BAAD => unset
-yotshell_ptrofenv: dw 0xBAAD
-yotshell_envseted: db 0x00
-yotshell_env_buf: times 512 dw 0 
+data_tag_start: db 0xBA, 0xAD, 0xBa, 0xAD
+register_buf: times 40 db 0 					; 0x0028
+sector_to_load: dw 0x3021						; 0x0002
+sector_to_load_ax: dw 0x3021					; 0x0002
+yotshell_sizeofenv: dw 0xBAAD ; BAAD => unset	; 0x0002
+yotshell_ptrofenv: dw 0xBAAD					; 0x0002
+yotshell_envseted: db 0x00						; 0x0001
+yotshell_env_buf: times 256 db 0 				; 0x0100
+bios_bda_databuf: times 256 db 0 				; 0x0100
+bios_ebda_databuf: times 1024 db 0 				; 0x0400
+screen_data_buf: times 4000 db 0 				; 0x0FA0
+data_tag_end: db 0xF0, 0x0D, 0xF0, 0x0D
+res:	times 0x227 db 0 
 ;-------------------------------------
 local_var_end:
-local_var_size: dw 0
-	
-;multiprocess_position: dw 0x8050
-

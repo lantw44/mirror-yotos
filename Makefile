@@ -43,9 +43,9 @@ while1: while1.o $(YOT16_LIBC)
 	ld86 -T 0x0000 -d $^ -o $@
 
 pmboot: pmgdt.s
-	nasm -f bin -dload_offset=0x80500 -dpmkernel=0x80700 $< -o $@
+	nasm -f bin -dload_offset=0x00500 -dpmkernel=0x00700 $< -o $@
 pmkern: pmkern.o pmint.o $(YOT32_KLIB)
-	ld -melf_i386 -Ttext 0x80700 $^ --oformat binary -o $@
+	ld -melf_i386 -Ttext 0x00700 $^ --oformat binary -o $@
 
 pmkern.o: pmkern.s
 	nasm -f elf32 $< -o $@

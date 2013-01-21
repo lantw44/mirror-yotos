@@ -124,7 +124,7 @@ _pm_init:
 	in		al, dx
 	mov		byte [esp], al
 
-	mov		dx, 0xA1	; PIC1
+	mov		dx, 0xA1	; PIC2
 	in		al, dx
 	mov		byte [esp+1], al
 

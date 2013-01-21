@@ -11,7 +11,7 @@ entry:
 loaddisk:
 	mov		si, cx
 	mov		ah, 0x02	; function: read disk sectors
-	mov		al, 8		; sector count
+	mov		al, 16		; sector count
 	mov		dh, 0		; head
 	mov		dl, 0		; drive number
 	mov		ch, 0		; track 
