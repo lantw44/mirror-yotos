@@ -114,7 +114,7 @@ gdt_user_code:	; user mode code segment descriptor
 	db	0x0			
 
 gdt_user_data:	; user mode data segment descriptor
-	dw	0xfff
+	dw	0xffff
 	dw	0x0
 	db	0x0
 	db	11110010b
