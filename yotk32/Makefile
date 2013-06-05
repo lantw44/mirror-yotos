@@ -14,7 +14,7 @@ $(LIB): $(OBJ)
 	ar rcs $@ $(OBJ)
 
 .s.o:
-	nasm -f elf $< -o $@
+	nasm -f elf32 $< -o $@
 .c.o:
 	gcc -m32 -ffreestanding -fleading-underscore -c $< -o $@
 
