@@ -1,11 +1,11 @@
 
 1 基本功能
 
--- 插斷: int 0x50: 關機. (好像不是yotlibc XD")
--- Macro: void exit(全域變數) 取消.
+-- 插斷: int 0x50: 關機
+-- 插斷: int 0x51: 重新啟動
 
 
-2 輸出（透過 BIOS）
+2 透過 BIOS 執行輸出
 
 -- Function: void putint(unsigned short 數字)
     以 10 進位顯示一個 16-bit 無號整數
@@ -17,7 +17,7 @@
     顯示字串（不會自動加上 '\n'）
 
 
-3 讀入一個按鍵
+3 透過 BIOS 讀取鍵盤輸入
 
 -- Function: int getch(void)
     等待使用者按鍵，回傳按鍵的 scan code 與 ASCII code
@@ -107,7 +107,7 @@
     清空整個螢幕
 
 -- Function: void chv_scroll(int 行數)
-    螢幕捲動
+    螢幕向下捲動
 
 -- Function: char chv_memread(int 位置)
     自 0xB8000+位置 讀回一個位元組
@@ -134,7 +134,38 @@
 
 5 字串輸入
 
--- Function: int getstr(char* 字串, int 字串最大長度)
-    ARG1 = 要存到哪裡
-    ARG2 = 最多可以讀多長（'\0' 不計入，但要自行保留空間）
-    RVAL = 實際讀了幾個字
+-- Function: int getstr(char* 字串, int 字串最大長度, int 顏色對)
+    字串：儲存目的地
+    字串最大長度：長度減一（'\0' 不計入，但要字型保留空間）
+    顏色對：前景背景顏色對，可用 CHV_COLORPAIR() 產生
+    回傳值：實際讀了幾個字
+    功能鍵介紹：
+        Enter：完成輸入
+        Backspace：刪除最後一個字
+        Esc：清空輸入
+
+-- Function: int yotrl(char* 字串, const char* 初始值, int 最大長度, int 顏色對)
+    字串：儲存目的地
+    初始值：編輯時的初始字串
+    字串最大長度：長度減一（'\0' 不計入，但要自行保留空間）
+    顏色對：前景背景顏色對，可用 CHV_COLORPAIR() 產生
+    回傳值：實際讀了幾個字
+    功能鍵介紹：
+        Enter：完成輸入
+        Arrow Key：移動游標
+        Backspace：刪除游標前面一個字
+        Delete：刪除游標所在位置的字
+        Ctrl+U：往前刪除所有文字
+        Ctrl+K：往後刪除所有文字
+        Ctrl+W：往前刪除一個英文單字
+        Home 或 Ctrl+A：移動游標到開頭
+        End 或 Ctrl+E：移動游標到結尾
+        Esc 或 Ctrl+C：清空輸入
+
+6 字串函式
+-- Function: int strcmp(const char* 字串一, const char* 字串二)
+    比較兩個字串，回傳值定義與 C 標準相同
+
+-- Function: int strtos(const char* 字串, unsigned int* 回傳的整數)
+    將字串轉為整數，支援 10 進位和 16 進位，回傳 1 表示轉換成功，回傳 0
+    表示失敗且不改變任何變數值
